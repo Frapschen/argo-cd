@@ -43,6 +43,7 @@ const APP_FIELDS = [
     'status.sync.revision',
     'status.health',
     'status.operationState.phase',
+    'status.operationState.finishedAt',
     'status.operationState.operation.sync',
     'status.summary',
     'status.resources'
@@ -113,7 +114,7 @@ const ViewPref = ({children}: {children: (pref: AppsListPreferences & {page: num
                                     .filter(item => !!item);
                             }
                             if (params.get('autoSync') != null) {
-                                viewPref.autosyncFilter = params
+                                viewPref.autoSyncFilter = params
                                     .get('autoSync')
                                     .split(',')
                                     .filter(item => !!item);
@@ -389,6 +390,20 @@ export const ApplicationsList = (props: RouteComponentProps<{}>) => {
                                         {(applications: models.Application[]) => {
                                             const healthBarPrefs = pref.statusBarView || ({} as HealthStatusBarPreferences);
                                             const {filteredApps, filterResults} = filterApps(applications, pref, pref.search);
+                                            const handleCreatePanelClose = async () => {
+                                                const outsideDiv = document.querySelector('.sliding-panel__outside');
+                                                const closeButton = document.querySelector('.sliding-panel__close');
+
+                                                if (outsideDiv && closeButton && closeButton !== document.activeElement) {
+                                                    const confirmed = await ctx.popup.confirm('Close Panel', 'Closing this panel will discard all entered values. Continue?');
+                                                    if (confirmed) {
+                                                        ctx.navigation.goto('.', {new: null}, {replace: true});
+                                                    }
+                                                } else if (closeButton === document.activeElement) {
+                                                    // If the close button is focused or clicked, close without confirmation
+                                                    ctx.navigation.goto('.', {new: null}, {replace: true});
+                                                }
+                                            };
                                             return (
                                                 <React.Fragment>
                                                     <FlexTopBar
@@ -516,6 +531,18 @@ export const ApplicationsList = (props: RouteComponentProps<{}>) => {
                                                                                 </h5>
                                                                             </EmptyState>
                                                                         )}
+                                                                        sortOptions={[
+                                                                            {title: 'Name', compare: (a, b) => a.metadata.name.localeCompare(b.metadata.name)},
+                                                                            {
+                                                                                title: 'Created At',
+                                                                                compare: (b, a) => a.metadata.creationTimestamp.localeCompare(b.metadata.creationTimestamp)
+                                                                            },
+                                                                            {
+                                                                                title: 'Synchronized',
+                                                                                compare: (b, a) =>
+                                                                                    a.status.operationState?.finishedAt?.localeCompare(b.status.operationState?.finishedAt)
+                                                                            }
+                                                                        ]}
                                                                         data={filteredApps}
                                                                         onPageChange={page => ctx.navigation.goto('.', {page})}>
                                                                         {data =>
@@ -585,7 +612,7 @@ export const ApplicationsList = (props: RouteComponentProps<{}>) => {
                                                     </ObservableQuery>
                                                     <SlidingPanel
                                                         isShown={!!appInput}
-                                                        onClose={() => ctx.navigation.goto('.', {new: null}, {replace: true})}
+                                                        onClose={() => handleCreatePanelClose()} //Separate handling for outside click.
                                                         header={
                                                             <div>
                                                                 <button
